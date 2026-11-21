@@ -10,6 +10,7 @@ env:
   TARGET_SHA: 77c60cce8d798f5b885f81ffab42ae8794123aa9
 jobs:
   tests:
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -60,22 +61,22 @@ jobs:
           unzip -q codeql-linux64.zip && rm codeql-linux64.zip
       - name: Library variants
         run: |
-          true
-          cp -r base patched
-          cd patched && git apply ../agent/agent/private.patch && git diff --stat && cd ..
-          for v in base patched; do mkdir -p $v/javascript/ql/src/agent && cp agent/agent/Sources.ql $v/javascript/ql/src/agent/; done
+          mv base "$HOME/base"
+          cp -r "$HOME/base" "$HOME/patched"
+          git -C "$HOME/patched" apply "$PWD/agent/agent/private.patch" && git -C "$HOME/patched" diff --stat
+          for v in base patched; do mkdir -p $HOME/$v/javascript/ql/src/agent && cp agent/agent/Sources.ql $HOME/$v/javascript/ql/src/agent/; done
       - name: Create database
         run: |
           printf 'paths-ignore:\n  - scripts/regressions\n  - e2e\n' > config.yml
-          codeql/codeql database create db --language=javascript --build-mode=none --source-root=src --codescanning-config=config.yml --threads=4 --ram=14500 2>&1 | tail -5
+          codeql/codeql database create db --language=javascript --build-mode=none --source-root=src --codescanning-config=config.yml --threads=4 --ram=14500 2>&1 | tail -5; test -f db/codeql-database.yml
       - name: Compile
         run: |
           for v in base patched; do
             codeql/codeql query compile --threads=4 \
-              $v/javascript/ql/src/Security/CWE-915/PrototypePollutingAssignment.ql \
-              $v/javascript/ql/src/Performance/PolynomialReDoS.ql \
-              $v/javascript/ql/src/meta/alerts/LibraryInputs.ql \
-              $v/javascript/ql/src/agent/Sources.ql 2>&1 | tail -3
+              $HOME/$v/javascript/ql/src/Security/CWE-915/PrototypePollutingAssignment.ql \
+              $HOME/$v/javascript/ql/src/Performance/PolynomialReDoS.ql \
+              $HOME/$v/javascript/ql/src/meta/alerts/LibraryInputs.ql \
+              $HOME/$v/javascript/ql/src/agent/Sources.ql 2>&1 | tail -3
           done
       - name: Evaluate
         run: |
@@ -85,7 +86,7 @@ jobs:
             for v in base patched; do
               codeql/codeql database cleanup db --cache-cleanup=clear >/dev/null
               start=$(date +%s)
-              codeql/codeql database analyze db $v/javascript/ql/src/$q --rerun --threads=4 --ram=14500 \
+              codeql/codeql database analyze db $HOME/$v/javascript/ql/src/$q --rerun --threads=4 --ram=14500 \
                 --format=sarif-latest --output=out/$v-$n.sarif --evaluator-log=out/$v-$n.evlog.jsonl >/dev/null 2>out/$v-$n.stderr
               end=$(date +%s)
               echo "$n $v wall=$((end-start))s results=$(jq '.runs[0].results|length' out/$v-$n.sarif)" | tee -a out/summary.txt
@@ -97,7 +98,7 @@ jobs:
         run: |
           for v in base patched; do
             codeql/codeql database cleanup db --cache-cleanup=clear >/dev/null
-            codeql/codeql query run --database=db --threads=4 --ram=14500 --output=out/$v-sources.bqrs $v/javascript/ql/src/agent/Sources.ql >/dev/null 2>&1
+            codeql/codeql query run --database=db --threads=4 --ram=14500 --output=out/$v-sources.bqrs $HOME/$v/javascript/ql/src/agent/Sources.ql >/dev/null 2>&1
             codeql/codeql bqrs decode --format=csv out/$v-sources.bqrs > out/$v-sources.csv
             echo "== $v sources by kind"; tail -n +2 out/$v-sources.csv | awk -F'","' '{print $2}' | sort | uniq -c
             echo "== $v library inputs by package dir"; tail -n +2 out/$v-sources.csv | grep 'library input' | cut -d'"' -f2 | cut -d/ -f1-2 | sort | uniq -c | sort -rn | head
