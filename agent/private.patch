@@ -1,0 +1,23 @@
+diff --git a/javascript/ql/lib/semmle/javascript/PackageExports.qll b/javascript/ql/lib/semmle/javascript/PackageExports.qll
+index b40329806..ebfc465c9 100644
+--- a/javascript/ql/lib/semmle/javascript/PackageExports.qll
++++ b/javascript/ql/lib/semmle/javascript/PackageExports.qll
+@@ -31,7 +31,8 @@ private import NodeModuleResolutionImpl as NodeModule
+ private DataFlow::Node getAValueExportedByPackage() {
+   // The base case, an export from a named `package.json` file.
+   result =
+-    getAnExportFromModule(any(PackageJson pack | exists(pack.getPackageName())).getExportedModule(_))
++    getAnExportFromModule(any(PackageJson pack | exists(pack.getPackageName()) and not pack.isPrivate())
++          .getExportedModule(_))
+   or
+   // module.exports.bar.baz = result;
+   exists(DataFlow::PropWrite write |
+@@ -132,7 +133,7 @@ private DataFlow::Node getAValueExportedByPackage() {
+     factory.getName() = "factory" and
+     func.getParameter(i) = factory.getParameter() and
+     DataFlow::globalVarRef("define").getACall().getAnArgument() = factory.getALocalUse() and
+-    func.getFile() = any(PackageJsonEx pack).getMainFileOrBestGuess()
++    func.getFile() = any(PackageJsonEx pack | not pack.isPrivate()).getMainFileOrBestGuess()
+   |
+     result = func.getInvocation().getArgument(i).flow().getAFunctionValue().getAReturn()
+     or
