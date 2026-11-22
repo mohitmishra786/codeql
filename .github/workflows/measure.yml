@@ -45,6 +45,15 @@ jobs:
   analyze:
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { cli: v2.27.4, ref: 1be292a1e54696ca543b4ad0f9b4537b9687caa7 }
+          - { cli: v2.27.5, ref: ceeaafac4e629e0e39de04d40c719d7d18b4b612 }
+    env:
+      CODEQL_REF: ${{ matrix.ref }}
+      CLI_VERSION: ${{ matrix.cli }}
     steps:
       - uses: actions/checkout@v4
         with: { path: agent }
@@ -81,7 +90,7 @@ jobs:
       - name: Evaluate
         run: |
           mkdir -p out
-          for q in Security/CWE-915/PrototypePollutingAssignment.ql Performance/PolynomialReDoS.ql meta/alerts/LibraryInputs.ql; do
+          for q in Security/CWE-915/PrototypePollutingAssignment.ql Performance/PolynomialReDoS.ql; do
             n=$(basename $q .ql)
             for v in base patched; do
               codeql/codeql database cleanup db --cache-cleanup=clear >/dev/null
@@ -105,4 +114,4 @@ jobs:
           done | tee -a out/summary.txt
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: analyze, path: out }
+        with: { name: "analyze-${{ matrix.cli }}", path: out }
